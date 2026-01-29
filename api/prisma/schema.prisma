@@ -1,0 +1,252 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   // admin, landlord, tenant
+  status    String   @default("active") // active, inactive
+  wallet    Wallet?
+  owner     Owner?
+  tenant    Tenant?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Property {
+  id              String         @id @default(cuid())
+  propertyName    String
+  propertyType    String         // عمارة سكنية, فيلا, مجمع تجاري, أرض
+  propertyAddress String
+  owner           Owner          @relation(fields: [ownerId], references: [id])
+  ownerId         String
+  ownerName       String
+  ownerPhone      String
+  notes           String?
+  documents       Document[]
+  units           Unit[]
+  contracts       LeaseContract[]
+  expenses        Expense[]
+  reminders       Reminder[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Unit {
+  id                     String         @id @default(cuid())
+  property               Property       @relation(fields: [propertyId], references: [id])
+  propertyId             String
+  unitNumber             String
+  unitType               String         // شقة سكنية, فيلا, مكتب تجاري, محل تجاري
+  status                 String         @default("شاغرة") // شاغرة, مؤجرة, تحت الصيانة
+  rentAmount             String
+  area                   String?
+  rooms                  String?
+  bathrooms              String?
+  floor                  String?
+  hasAC                  Boolean        @default(false)
+  hasKitchen             Boolean        @default(false)
+  isFurnished            Boolean        @default(false)
+  electricityMeterNumber String?
+  waterMeterNumber       String?
+  parkingSpotNumber      String?
+  notes                  String?
+  appliances             Appliance[]
+  contracts              LeaseContract[]
+  expenses               Expense[]
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+}
+
+model Appliance {
+  id      String @id @default(cuid())
+  unit    Unit   @relation(fields: [unitId], references: [id])
+  unitId  String
+  name    String
+  count   String
+  notes   String?
+}
+
+model Tenant {
+  id           String         @id @default(cuid())
+  tenantName   String
+  tenantIdNo   String         @unique // National ID / Iqama
+  tenantPhone  String
+  nationality  String
+  email        String
+  paymentNotes String?
+  documents    Document[]
+  user         User?          @relation(fields: [userId], references: [id])
+  userId       String?        @unique
+  contracts    LeaseContract[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Owner {
+  id                       String         @id @default(cuid())
+  name                     String
+  nationalId               String         @unique
+  phone                    String
+  email                    String
+  managementFeeType        String         // percentage, fixed
+  managementFeeValue       String
+  managementAgreementStatus String         @default("not_sent")
+  ownerApprovalDate        String?
+  adminApprovalDate        String?
+  user                     User?          @relation(fields: [userId], references: [id])
+  userId                   String?        @unique
+  properties               Property[]
+  reminders                Reminder[]
+  payoutVouchers           PayoutVoucher[]
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+}
+
+model LeaseContract {
+  id                  String         @id @default(cuid())
+  property            Property       @relation(fields: [propertyId], references: [id])
+  propertyId          String
+  propertyAddress     String
+  unit                Unit           @relation(fields: [unitId], references: [id])
+  unitId              String
+  tenant              Tenant         @relation(fields: [tenantId], references: [id])
+  tenantId            String
+  tenantName          String
+  tenantNationalId    String
+  tenantPhone         String
+  landlordName        String
+  landlordId          String
+  landlordPhone       String
+  representedBy       String         // landlord, agent
+  agentName           String?
+  agentId             String?
+  agentPhone          String?
+  startDate           String
+  endDate             String
+  rentAmount          String
+  rentCycle           String         // annually, semi-annually, quarterly, monthly, custom
+  customRentCycleUnit String?
+  customRentCycleValue String?
+  securityDeposit     String
+  leasePurpose        String         // سكني, تجاري
+  tenantCompanyName   String?
+  tenantCompanyCR     String?
+  renewalNoticeDays   String?
+  terms               String
+  contractStatus      String         @default("active") // active, expired, terminated
+  approvalStatus      String         @default("pending_landlord")
+  documents           Document[]
+  paymentSchedule     PaymentSchedule[]
+  transactions        Transaction[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+}
+
+model PaymentSchedule {
+  id              String        @id @default(cuid())
+  contract        LeaseContract @relation(fields: [contractId], references: [id])
+  contractId      String
+  dueDate         String
+  amount          String
+}
+
+model Transaction {
+  id              String         @id @default(cuid())
+  date            String
+  description     String
+  amount          String
+  type            String         // payment, deposit, withdrawal, transfer, expense, commission
+  fromWalletId    String
+  toWalletId      String
+  relatedEntityId String?        // contractId, expenseId, voucherId
+  payoutStatus    String         @default("pending") // pending, paid
+  voucherNumber   String?
+  contract        LeaseContract? @relation(fields: [leaseContractId], references: [id])
+  leaseContractId String?
+  createdAt       DateTime       @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  date        String
+  description String
+  amount      String
+  category    String   // صيانة, خدمات, رسوم, أخرى
+  status      String   @default("pending") // paid, pending, in_progress
+  property    Property @relation(fields: [propertyId], references: [id])
+  propertyId  String
+  unit        Unit?    @relation(fields: [unitId], references: [id])
+  unitId      String?
+  vendor      String?
+  createdAt   DateTime @default(now())
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique
+  ownerType String   // user, owner, system
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  title      String
+  dueDate    String
+  priority   String   // low, medium, high
+  status     String   @default("pending")
+  owner      Owner    @relation(fields: [ownerId], references: [id])
+  ownerId    String
+  property   Property? @relation(fields: [propertyId], references: [id])
+  propertyId String?
+  createdAt  DateTime @default(now())
+}
+
+model PayoutVoucher {
+  id                     String   @id @default(cuid())
+  voucherNumber          String
+  payoutDate             String
+  owner                  Owner    @relation(fields: [ownerId], references: [id])
+  ownerId                String
+  ownerName              String
+  includedTransactionIds String   // JSON stringified array
+  grossAmount            String
+  managementFee          String
+  totalAmount            String
+  createdAt              DateTime @default(now())
+}
+
+model Document {
+  id              String         @id @default(cuid())
+  name            String
+  type            String
+  data            String         // base64
+  property        Property?      @relation(fields: [propertyId], references: [id])
+  propertyId      String?
+  tenant          Tenant?        @relation(fields: [tenantId], references: [id])
+  tenantId        String?
+  leaseContract   LeaseContract? @relation(fields: [leaseContractId], references: [id])
+  leaseContractId String?
+}
+
+model AppSettings {
+  id                String @id @default("settings")
+  appName           String
+  logoUrl           String
+  primaryColor      String
+  contractTemplate  String
+  statementTemplate String
+  isDemoMode        Boolean @default(false)
+}
